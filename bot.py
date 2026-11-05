@@ -6,7 +6,7 @@ import random
 import time
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, F, Router
@@ -18,8 +18,6 @@ from aiogram.types import (
     KeyboardButton,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
-    ReplyKeyboardRemove,
-    BufferedInputFile
 )
 import httpx
 from google_play_scraper import app as play_scraper
@@ -28,10 +26,11 @@ from Crypto.Util.Padding import pad
 
 # ==================== CONFIG & TOKENS ====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://rosyyjwtbotp.onrender.com/webhook")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://your-render-app.onrender.com/webhook")
 
 app = FastAPI()
 bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
 router = Router()
 
 AES_KEY = b'Yg&tc%DEuh6%Zc^8'
@@ -39,7 +38,7 @@ AES_IV  = b'6oyZDr22E3ychjM%'
 LOGIN_HOST = "https://loginbp.ppmainecoonghj.com"
 
 # Active state tracking for user cancellation / stop sending
-active_processes: Dict[int, bool] = {}
+active_processes: Dict[int, Any] = {}
 
 # ==================== PERMANENT KEYBOARDS ====================
 def get_main_keyboard() -> ReplyKeyboardMarkup:
@@ -288,13 +287,12 @@ async def handle_text_inputs(message: Message):
             reply_markup=get_stop_keyboard()
         )
         
-        # Simulate live process with stop support
         asyncio.create_task(run_bulk_request_simulation(message, targets))
 
 async def run_bulk_request_simulation(message: Message, targets: List[int]):
     user_id = message.from_user.id
     sent_count = 0
-    total_accounts = 18  # simulated or loaded from session
+    total_accounts = 18
     
     status_msg = await message.answer(f"⏳ Progress: 0/{total_accounts} | ✓ 0 | ✗ 0")
 
@@ -328,7 +326,6 @@ async def auto_process_handler(message: Message):
         reply_markup=get_stop_keyboard()
     )
     await asyncio.sleep(1.5)
-    # Simulated strict verification check
     connected = True 
     if connected:
         await message.answer(
@@ -364,4 +361,3 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("bot:app", host="0.0.0.0", port=8000)
-    
