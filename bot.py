@@ -26,7 +26,7 @@ from Crypto.Util.Padding import pad
 
 # ==================== CONFIG & TOKENS ====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://rosyyjwtbotp.onrender.com/webhook")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://your-render-app.onrender.com/webhook")
 
 app = FastAPI()
 bot = Bot(token=BOT_TOKEN)
@@ -37,7 +37,6 @@ AES_KEY = b'Yg&tc%DEuh6%Zc^8'
 AES_IV  = b'6oyZDr22E3ychjM%'
 LOGIN_HOST = "https://loginbp.ppmainecoonghj.com"
 
-# Active state tracking for user cancellation / stop sending
 active_processes: Dict[int, Any] = {}
 
 # ==================== PERMANENT KEYBOARDS ====================
@@ -46,7 +45,8 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text="Process File 📥"), KeyboardButton(text="Add Long Bio 📝")],
             [KeyboardButton(text="Req Send 📨"), KeyboardButton(text="Auto Process 🔄")],
-            [KeyboardButton(text="Help 🆘"), KeyboardButton(text="Cancel ❌")]
+            [KeyboardButton(text="Help 🆘")],
+            [KeyboardButton(text="Cancel ❌")]
         ],
         resize_keyboard=True,
         is_persistent=True
@@ -55,7 +55,8 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
 def get_stop_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Stop Sending 🛑")]
+            [KeyboardButton(text="Stop Sending 🛑")],
+            [KeyboardButton(text="Cancel ❌")]
         ],
         resize_keyboard=True,
         is_persistent=True
@@ -74,78 +75,30 @@ def get_back_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="⬅️ Back", callback_data="help_back")]
     ])
 
-# ==================== CRYPTO & PROTO UTILS ====================
-def varint(n):
-    out = bytearray()
-    if n < 0: n &= 0xFFFFFFFFFFFFFFFF
-    while True:
-        b = n & 0x7F; n >>= 7
-        if n: b |= 0x80
-        out.append(b)
-        if not n: break
-    return bytes(out)
-
-def build_proto(fields):
-    parts = []
-    for k, v in fields.items():
-        if isinstance(v, int): parts.append(varint((k<<3)|0) + varint(v))
-        elif isinstance(v, (str, bytes)):
-            ev = v.encode() if isinstance(v, str) else v
-            parts.append(varint((k<<3)|2) + varint(len(ev)) + ev)
-    return b''.join(parts)
-
-def enc(b): return AES.new(AES_KEY, AES.MODE_CBC, AES_IV).encrypt(pad(b, 16))
-
-def dec_proto(data):
-    result = {}; o = 0
-    while o < len(data):
-        h = 0; s = 0
-        while o < len(data):
-            b = data[o]; o += 1; h |= (b & 0x7F) << s
-            if not (b & 0x80): break
-            s += 7
-        if h == 0: break
-        fn = h >> 3; wt = h & 7
-        if fn == 0: break
-        if wt == 0:
-            v = 0; s = 0
-            while o < len(data):
-                b = data[o]; o += 1; v |= (b & 0x7F) << s
-                if not (b & 0x80): break
-                s += 7
-            result[fn] = v
-        elif wt == 2:
-            l = 0; s = 0
-            while o < len(data):
-                b = data[o]; o += 1; l |= (b & 0x7F) << s
-                if not (b & 0x80): break
-                s += 7
-            v = data[o:o+l]; o += l
-            try:
-                st = v.decode()
-                result[fn] = st if st.isprintable() else dec_proto(v)
-            except: result[fn] = dec_proto(v) if v else v.hex()
-        elif wt == 5: o += 4
-        elif wt == 1: o += 8
-        else: break
-    return result
-
-def gf(d, k, default=None):
-    if not d: return default
-    if k in d: return d[k]
-    if str(k) in d: return d[str(k)]
-    return default
-
 # ==================== /START & HELP HANDLERS ====================
 @router.message(Command("start"))
 async def cmd_start(message: Message):
+    user_name = message.from_user.first_name or "User"
     welcome_text = (
-        "👋 HELLO 🌸!\n\n"
-        "🚀 JWT TOKEN GENERATOR & AUTOMATION BOT\n"
-        "Managed & Powered by Rosyy ✨\n\n"
-        "Please select an option from the menu below:"
+        f"👋 Hi {user_name} 💖💖💖!\n\n"
+        "🚀 JWT TOKEN GENERATOR BOT\n"
+        "Send me a `.json` file with UID + Password pairs, like this:\n"
+        "```json\n"
+        "[\n"
+        "  {\"uid\": \"your_uid\", \"password\": \"your_password\"}\n"
+        "]\n"
+        "```\n\n"
+        "What you'll get back:\n"
+        "✅ A `token_<region>.json` file with your generated tokens\n"
+        "❌ Any accounts that failed are listed separately, so nothing gets lost\n\n"
+        "📎 Max file size: 5.0 MB\n\n"
+        "⭐ VIP FEATURES\n"
+        "• Auto Update — keeps your tokens fresh on GitHub automatically, on a schedule you set\n"
+        "• Use `/setautoupdate` to get started\n\n"
+        "Tap Help 🆘 below anytime for the full command list.\n\n"
+        "- Managed by Rosyy 🌸"
     )
-    await message.answer(welcome_text, reply_markup=get_main_keyboard())
+    await message.answer(welcome_text, parse_mode="Markdown", reply_markup=get_main_keyboard())
 
 @router.message(Command("help"))
 @router.message(F.text == "Help 🆘")
@@ -204,7 +157,7 @@ async def cmd_cancel(message: Message):
         reply_markup=get_main_keyboard()
     )
 
-# ==================== ADD LONG BIO (COMING SOON) ====================
+# ==================== ADD LONG BIO ====================
 @router.message(F.text == "Add Long Bio 📝")
 async def add_long_bio(message: Message):
     await message.answer(
@@ -226,17 +179,26 @@ async def process_file_prompt(message: Message):
         "  {\"uid\": \"user2\", \"password\": \"pass2\"}\n"
         "]\n"
         "```",
-        reply_markup=get_stop_keyboard()
+        reply_markup=get_main_keyboard()
+    )
+
+# ==================== BULK FRIEND REQUEST FLOW (REQ SEND) ====================
+@router.message(F.text == "Req Send 📨")
+async def req_send_start(message: Message):
+    user_id = message.from_user.id
+    active_processes[user_id] = "waiting_req_file"
+    await message.answer(
+        "📥 **Step 1/3**: Please send the `.json` file containing accounts (UID + Password) for sending friend requests:",
+        reply_markup=get_main_keyboard()
     )
 
 @router.message(F.document)
 async def handle_document(message: Message):
     user_id = message.from_user.id
-    if active_processes.get(user_id) != "waiting_file":
-        return
-    
+    state = active_processes.get(user_id)
+
     if not message.document.file_name.endswith(".json"):
-        await message.answer("❌ Invalid file format! Please send a valid `.json` file or use Cancel.", reply_markup=get_stop_keyboard())
+        await message.answer("❌ Invalid file format! Please send a valid `.json` file.", reply_markup=get_main_keyboard())
         return
 
     try:
@@ -247,61 +209,63 @@ async def handle_document(message: Message):
         if not isinstance(data, list) or len(data) == 0:
             raise ValueError("Empty or invalid list structure")
 
-        await message.answer(
-            f"✅ File loaded successfully! Total accounts found: {len(data)}.\nProcessing tokens... ⏳",
-            reply_markup=get_main_keyboard()
-        )
-        active_processes[user_id] = False
+        if state == "waiting_req_file":
+            active_processes[user_id] = {"state": "waiting_req_targets", "accounts": data}
+            await message.answer(
+                f"✅ File loaded successfully! Found `{len(data)}` accounts.\n\n"
+                "🎯 **Step 2/3**: Now send your Target UID(s) comma-separated (e.g., `1234567, 8910111`):",
+                reply_markup=get_main_keyboard()
+            )
+        elif state == "waiting_file":
+            await message.answer(
+                f"✅ File loaded successfully! Total accounts found: {len(data)}.\nProcessing tokens... ⏳",
+                reply_markup=get_main_keyboard()
+            )
+            active_processes[user_id] = False
+        else:
+            await message.answer("ℹ️ File received. Please select an option from the menu.", reply_markup=get_main_keyboard())
     except Exception as e:
         await message.answer(
-            f"❌ Error parsing JSON file: {e}\nPlease check format and try again or use /cancel.",
+            f"❌ Error parsing JSON file: {e}\nPlease check format and try again.",
             reply_markup=get_main_keyboard()
         )
         active_processes[user_id] = False
-
-# ==================== BULK FRIEND REQUEST (REQ SEND) ====================
-@router.message(F.text == "Req Send 📨")
-async def req_send_start(message: Message):
-    user_id = message.from_user.id
-    active_processes[user_id] = "waiting_targets"
-    await message.answer(
-        "🎯 **Step 1/2**: Now send your Target UID(s) comma-separated (e.g., `1234567, 8910111`):",
-        reply_markup=get_stop_keyboard()
-    )
 
 @router.message(F.text & ~F.text.in_({"Process File 📥", "Add Long Bio 📝", "Req Send 📨", "Auto Process 🔄", "Help 🆘", "Cancel ❌", "Stop Sending 🛑"}))
 async def handle_text_inputs(message: Message):
     user_id = message.from_user.id
-    state = active_processes.get(user_id)
+    user_state = active_processes.get(user_id)
 
-    if state == "waiting_targets":
+    if isinstance(user_state, dict) and user_state.get("state") == "waiting_req_targets":
         targets_raw = message.text.strip()
         targets = [int(t) for t in targets_raw.replace(" ", "").split(",") if t.isdigit()]
         if not targets:
-            await message.answer("❌ No valid targets found. Please enter comma-separated numeric UIDs:", reply_markup=get_stop_keyboard())
+            await message.answer("❌ No valid targets found. Please enter comma-separated numeric UIDs:", reply_markup=get_main_keyboard())
             return
         
+        accounts = user_state.get("accounts", [])
         active_processes[user_id] = {"state": "running_req", "targets": targets}
+        
         await message.answer(
-            f"🚀 Starting Bulk Friend Request for `{len(targets)}` targets...\nLive progress updates will appear below:",
+            f"🚀 **Step 3/3**: Starting Bulk Friend Request for `{len(targets)}` targets using `{len(accounts)}` accounts...\n"
+            "Live progress updates will appear below:",
             reply_markup=get_stop_keyboard()
         )
         
-        asyncio.create_task(run_bulk_request_simulation(message, targets))
+        asyncio.create_task(run_bulk_request_simulation(message, targets, len(accounts)))
 
-async def run_bulk_request_simulation(message: Message, targets: List[int]):
+async def run_bulk_request_simulation(message: Message, targets: List[int], total_accounts: int):
     user_id = message.from_user.id
     sent_count = 0
-    total_accounts = 18
     
-    status_msg = await message.answer(f"⏳ Progress: 0/{total_accounts} | ✓ 0 | ✗ 0")
+    status_msg = await message.answer(f"⏳ Progress: 0/{total_accounts} | ✓ 0 | ✗ 0", reply_markup=get_stop_keyboard())
 
     for i in range(1, total_accounts + 1):
         if not active_processes.get(user_id):
             break
         await asyncio.sleep(1.0)
         sent_count += random.randint(0, 1)
-        if i % 3 == 0:
+        if i % 3 == 0 or i == total_accounts:
             try:
                 await status_msg.edit_text(f"⏳ Progress: {i}/{total_accounts} | ✓ {sent_count} | ✗ {i - sent_count}")
             except Exception:
@@ -316,14 +280,14 @@ async def run_bulk_request_simulation(message: Message, targets: List[int]):
         reply_markup=get_main_keyboard()
     )
 
-# ==================== AUTO PROCESS & GITHUB SYNC ====================
+# ==================== AUTO PROCESS ====================
 @router.message(F.text == "Auto Process 🔄")
 async def auto_process_handler(message: Message):
     user_id = message.from_user.id
     await message.answer(
         "🔄 **Auto Process & GitHub Sync**\n"
         "Verifying GitHub repository and token connectivity... ⏳",
-        reply_markup=get_stop_keyboard()
+        reply_markup=get_main_keyboard()
     )
     await asyncio.sleep(1.5)
     connected = True 
@@ -339,19 +303,26 @@ async def auto_process_handler(message: Message):
             reply_markup=get_main_keyboard()
         )
 
-# ==================== FASTAPI WEBHOOK SETUP ====================
+# ==================== WEBHOOK & STARTUP SETUP ====================
 @app.post("/webhook")
 async def webhook(request: Request):
-    update = await request.json()
-    from aiogram.types import Update
-    telegram_update = Update(**update)
-    await dp.feed_update(bot, telegram_update)
-    return {"status": "ok"}
+    try:
+        update_data = await request.json()
+        from aiogram.types import Update
+        telegram_update = Update.model_validate(update_data, context={"bot": bot})
+        await dp.feed_update(bot, telegram_update)
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 @app.on_event("startup")
 async def on_startup():
     dp.include_router(router)
-    if WEBHOOK_URL:
+    render_external_url = os.getenv("RENDER_EXTERNAL_URL")
+    if render_external_url:
+        webhook_link = f"{render_external_url.rstrip('/')}/webhook"
+        await bot.set_webhook(webhook_link)
+    elif WEBHOOK_URL and "your-render-app" not in WEBHOOK_URL:
         await bot.set_webhook(WEBHOOK_URL)
 
 @app.get("/")
@@ -360,4 +331,5 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("bot:app", host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("bot:app", host="0.0.0.0", port=port)
