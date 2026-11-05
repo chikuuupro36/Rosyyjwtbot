@@ -26,7 +26,7 @@ from Crypto.Util.Padding import pad
 
 # ==================== CONFIG & TOKENS ====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://your-render-app.onrender.com/webhook")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://rosyyjwtbotp.onrender.com/webhook")
 
 app = FastAPI()
 bot = Bot(token=BOT_TOKEN)
